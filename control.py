@@ -169,7 +169,7 @@ def train(args, device, t, step_size, coeffsLQR):
 
 def visualize(args, device, t, step_size, coeffsLQR):
 
-    from matplotlib.animation import animation
+    import matplotlib.animation as animation
     drift_lqr = Func_ODE_LQR(input_dim=args.d,
             output_dim=args.d,
             hidden_dims=args.hidden_dims,
