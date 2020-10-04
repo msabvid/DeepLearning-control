@@ -6,10 +6,21 @@ import tqdm
 import argparse
 import os
 import numpy as np
-
+from dataclasses import dataclass
 from torchdiffeq import odeint_adjoint as odeint
 
 from lib.networks import ResFNN
+
+
+@dataclass
+class CoeffsLQR:
+    """Coefficients that we use in the LQR model
+    """
+    H = torch.zeros(args.d, args.d).to(device)
+    M = torch.eye(args.d).to(device)
+    C = torch.zeros(args.d, args.d).to(device)
+    D = torch.zeros(args.d, args.d).to(device)
+    R = torch.eye(args.d).to(device)
 
 
 class Func_ODE_LQR(nn.Module):
@@ -52,7 +63,8 @@ class LQR():
 
     def x_M_x(self, x, M):
         """
-        Calculates the quadratic product x^T * M * x
+        Calculates the quadratic product x.T * M * x
+        for each sample in x. 
 
         Parameters
         ----------
@@ -115,20 +127,21 @@ def init_weights(m):
 
 
 
-def train(args, device, t, step_size, H, M, C, D, R):
+def train(args, device, t, step_size, ceoffsLQRR):
     set_seed(args.seed)
     # create model
     drift_lqr = Func_ODE_LQR(input_dim=args.d,
             output_dim=args.d,
             hidden_dims=args.hidden_dims,
-            H=H, M=M)
+            H=coeffsLQR.H, M=coeffsLQR.M)
     drift_lqr.to(device)
     drift_lqr.apply(init_weights)
     lqr = LQR(drift_lqr, 
-            R=R,
-            C=C,
-            D=D)
+            R=coeffsLQR.R,
+            C=coeffsLQR.C,
+            D=coeffsLQR.D)
     optimizer = torch.optim.RMSprop(drift_lqr.parameters(), lr=0.001)
+
     # Train
     pbar = tqdm.tqdm(total=args.n_iter)
     for it in range(args.n_iter):
@@ -136,7 +149,7 @@ def train(args, device, t, step_size, H, M, C, D, R):
         x0 = 2*torch.randn(args.batch_size, args.d, device=device)
         x = odeint(drift_lqr, x0, t,
                 method="euler",
-                options=dict(step_size=0.05))
+                options=dict(step_size=args.step_size_solver))
         loss = lqr.running_cost(t, step_size, x) + lqr.final_cost(x)
         loss = loss.mean()
         loss.backward()
@@ -153,18 +166,47 @@ def train(args, device, t, step_size, H, M, C, D, R):
     pbar.write("Training ended")
 
 
-def visualize(args, device, t, step_size, H, M, C, D, R):
 
+def visualize(args, device, t, step_size, coeffsLQR):
+
+    from matplotlib.animation import animation
     drift_lqr = Func_ODE_LQR(input_dim=args.d,
             output_dim=args.d,
             hidden_dims=args.hidden_dims,
-            H=H, M=M)
+            H=coeffsLQR.H, M=coeffsLQR.M)
     drift_lqr.to(device)
-    drift_lqr.apply(init_weights)
+    state = torch.load(os.path.join(args.base_dir, "policy_lqr.pt"), map_location=device)
+    drif_lqr.load_state_dict(state)
+    
     lqr = LQR(drift_lqr, 
-            R=R,
-            C=C,
-            D=D)
+            R=coeffsLQR.R,
+            C=coeffsLQR.C,
+            D=coeffsLQR.D)
+    # evaluation points
+    x0=[]
+    for i in range(args.d):
+        x0.append(torch.linspace(-2,2,100).to(device))
+    x0 = torch.meshgrid(x0)
+    x0 = torch.cat([grid_x.view(-1,1) for grid_x in x0],1)
+    
+    with torch.no_grad():
+        x = odeint(drift_lqr, x0, t,
+                method="euler",
+                options=dict(step_size=args.setp_size_solver))
+    fig = plt.figure()
+    ims = []
+    ones = torch.ones(x.shape[1],1,device=x.device)
+    for idx, tt in enumerate(t):
+        input_nn = torch.cat([t[idx],x[idx,:,:]],1)
+        with torch.no_grad():
+            alpha = drift_lqr.alpha(input_nn)
+        alpha = alpha.cpu().numpy()
+        xx = x[idx,:,:].cpu().numpy()
+        im = plt.quiver(X=xx[:,0], Y=xx[:,1], U=alpha[:,0], V=alpha[:,1])
+        ims.append([im,])
+    anim = animation.ArtistAnimation(fig, ims, interval=50, blit=True,repeat_delay=3000)
+    anim.save(os.path.join(args.base_dir, "quiver.mp4"))
+        
 
 if __name__=='__main__':
 
@@ -181,7 +223,10 @@ if __name__=='__main__':
     parser.add_argument("--n_iter", default=500)
     # arguments for LQR problem set up
     parser.add_argument("--T", default=5, type=int, help="horizon time of control problem")
-    parser.add_argument("--steps", default=50, type=int)
+    parser.add_argument("--steps", default=50, type=int, help="equally distributed steps where ODE is evaluated")
+    parser.add_argument("--step_size_solver", type=float, default=0.05, help="step size used by the ODE solver")
+    parser.add_argument("--visualize", action=store_true, default=False)
+        
     
     args = parser.parse_args()
     if torch.cuda.is_available() and args.use_cuda:
@@ -194,11 +239,9 @@ if __name__=='__main__':
     # time discretisation
     t = torch.linspace(0, args.T, steps=args.steps+1).to(device)
     step_size = args.T/args.steps
-    H = torch.zeros(args.d, args.d).to(device)
-    M = torch.eye(args.d).to(device)
-    C = torch.zeros(args.d, args.d).to(device)
-    D = torch.zeros(args.d, args.d).to(device)
-    R = torch.eye(args.d).to(device)
+    coeffsLQR = CoeffsLQR()
     train(args, device=device, t=t, step_size=step_size,
-            H=H,M=M,C=C,D=D,R=R)
+            coeffsLQR=coeffsLQR)
+    if args.visualize:
+        visualize(args, device=device, t=t, step_size=step_size, coeffsLQR=coeffsLQR)
 
