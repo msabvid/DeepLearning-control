@@ -12,15 +12,15 @@ from torchdiffeq import odeint_adjoint as odeint
 from lib.networks import ResFNN
 
 
-@dataclass
 class CoeffsLQR:
     """Coefficients that we use in the LQR model
     """
-    H = torch.zeros(args.d, args.d).to(device)
-    M = torch.eye(args.d).to(device)
-    C = torch.zeros(args.d, args.d).to(device)
-    D = torch.zeros(args.d, args.d).to(device)
-    R = torch.eye(args.d).to(device)
+    def __init__(self, d):
+        self.H = torch.zeros(d, d).to(device)
+        self.M = torch.eye(d).to(device)
+        self.C = torch.zeros(d, d).to(device)
+        self.D = torch.zeros(d, d).to(device)
+        self.R = torch.eye(d).to(device)
 
 
 class Func_ODE_LQR(nn.Module):
@@ -127,7 +127,7 @@ def init_weights(m):
 
 
 
-def train(args, device, t, step_size, ceoffsLQRR):
+def train(args, device, t, step_size, coeffsLQR):
     set_seed(args.seed)
     # create model
     drift_lqr = Func_ODE_LQR(input_dim=args.d,
@@ -160,7 +160,7 @@ def train(args, device, t, step_size, ceoffsLQRR):
 
     # saving the model
     if not os.path.exists(args.base_dir):
-        os.path.makedirs(args.base_dir)
+        os.makedirs(args.base_dir)
     torch.save(drift_lqr.state_dict(), os.path.join(args.base_dir, "policy_lqr.pt"))
 
     pbar.write("Training ended")
@@ -220,12 +220,12 @@ if __name__=='__main__':
     parser.add_argument("--batch_size", default=100, type=int)
     parser.add_argument("--d", default=1, type=int)
     parser.add_argument("--hidden_dims", default=[20,20], nargs="+", type=int)
-    parser.add_argument("--n_iter", default=500)
+    parser.add_argument("--n_iter", type=int, default=500)
     # arguments for LQR problem set up
     parser.add_argument("--T", default=5, type=int, help="horizon time of control problem")
     parser.add_argument("--steps", default=50, type=int, help="equally distributed steps where ODE is evaluated")
     parser.add_argument("--step_size_solver", type=float, default=0.05, help="step size used by the ODE solver")
-    parser.add_argument("--visualize", action=store_true, default=False)
+    parser.add_argument("--visualize", action="store_true", default=False)
         
     
     args = parser.parse_args()
@@ -239,9 +239,9 @@ if __name__=='__main__':
     # time discretisation
     t = torch.linspace(0, args.T, steps=args.steps+1).to(device)
     step_size = args.T/args.steps
-    coeffsLQR = CoeffsLQR()
-    train(args, device=device, t=t, step_size=step_size,
-            coeffsLQR=coeffsLQR)
+    coeffsLQR = CoeffsLQR(args.d)
     if args.visualize:
         visualize(args, device=device, t=t, step_size=step_size, coeffsLQR=coeffsLQR)
-
+    else:
+        train(args, device=device, t=t, step_size=step_size,
+                coeffsLQR=coeffsLQR)
