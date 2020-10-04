@@ -170,13 +170,15 @@ def train(args, device, t, step_size, coeffsLQR):
 def visualize(args, device, t, step_size, coeffsLQR):
 
     import matplotlib.animation as animation
+    import matplotlib.pyplot as plt
+
     drift_lqr = Func_ODE_LQR(input_dim=args.d,
             output_dim=args.d,
             hidden_dims=args.hidden_dims,
             H=coeffsLQR.H, M=coeffsLQR.M)
     drift_lqr.to(device)
     state = torch.load(os.path.join(args.base_dir, "policy_lqr.pt"), map_location=device)
-    drif_lqr.load_state_dict(state)
+    drift_lqr.load_state_dict(state)
     
     lqr = LQR(drift_lqr, 
             R=coeffsLQR.R,
@@ -185,24 +187,25 @@ def visualize(args, device, t, step_size, coeffsLQR):
     # evaluation points
     x0=[]
     for i in range(args.d):
-        x0.append(torch.linspace(-2,2,100).to(device))
+        x0.append(torch.linspace(-2,2,10).to(device))
     x0 = torch.meshgrid(x0)
-    x0 = torch.cat([grid_x.view(-1,1) for grid_x in x0],1)
+    x0 = torch.cat([grid_x.reshape(-1,1) for grid_x in x0],1)
     
     with torch.no_grad():
         x = odeint(drift_lqr, x0, t,
                 method="euler",
-                options=dict(step_size=args.setp_size_solver))
+                options=dict(step_size=args.step_size_solver))
     fig = plt.figure()
     ims = []
     ones = torch.ones(x.shape[1],1,device=x.device)
     for idx, tt in enumerate(t):
-        input_nn = torch.cat([t[idx],x[idx,:,:]],1)
+        print(tt)
+        input_nn = torch.cat([t[idx]*ones,x[idx,:,:]],1)
         with torch.no_grad():
             alpha = drift_lqr.alpha(input_nn)
         alpha = alpha.cpu().numpy()
         xx = x[idx,:,:].cpu().numpy()
-        im = plt.quiver(X=xx[:,0], Y=xx[:,1], U=alpha[:,0], V=alpha[:,1])
+        im = plt.quiver(xx[:,0], xx[:,1], alpha[:,0], alpha[:,1])
         ims.append([im,])
     anim = animation.ArtistAnimation(fig, ims, interval=50, blit=True,repeat_delay=3000)
     anim.save(os.path.join(args.base_dir, "quiver.mp4"))
