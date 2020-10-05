@@ -208,7 +208,8 @@ def visualize(args, device, t, step_size, coeffsLQR):
         im = plt.quiver(xx[:,0], xx[:,1], alpha[:,0], alpha[:,1])
         ims.append([im,])
     anim = animation.ArtistAnimation(fig, ims, interval=50, blit=True,repeat_delay=3000)
-    anim.save(os.path.join(args.base_dir, "quiver.mp4"))
+    #anim.save(os.path.join(args.base_dir, "quiver.mp4"))
+    anim.save(os.path.join(args.base_dir, "quiver.gif"), dpi=80, writer='imagemagick')
         
 
 if __name__=='__main__':
