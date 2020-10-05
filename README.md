@@ -23,7 +23,7 @@ where `C,D,R` are positive semi-definite matrices of size `(d,d)` where `d` is t
   ```
 
 
-- Example Training:
+- Example Training of 2-dimensional LQR problem:
 ```
  python lqr.py --d 2 --use_cuda
 ```
