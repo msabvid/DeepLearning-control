@@ -25,11 +25,11 @@ where `C,D,R` are positive semi-definite matrices of size `(d,d)` where `d` is t
 
 - Example Training:
 ```
- python lqr.py  --use_cuda
+ python lqr.py --d 2 --use_cuda
 ```
  - Visualizing the results:
  ```
- python lqr.py --visualize
+ python lqr.py --d 2 --visualize
  ```
 
 
