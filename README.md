@@ -13,8 +13,6 @@ that minimises the utility function
 
 where `C,D,R` are positive semi-definite matrices of size `(d,d)` where `d` is the dimension of the process `X_t`, and \alpha_s is a neural network that we optimise to minimise the utility function.  
 
-The current implementation solves the problem in the time interval `[0,5]`, X_0 sampled from N(0,2), `C=D=H=zeros(d,d)`, `M=R=Id(d)` 
-
 ### Running the script
   ```
   usage: lqr.py [-h] [--base_dir BASE_DIR] [--device DEVICE] [--use_cuda]
