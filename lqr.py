@@ -19,7 +19,7 @@ class CoeffsLQR:
         self.H = torch.zeros(d, d).to(device)
         self.M = torch.eye(d).to(device)
         self.C = torch.zeros(d, d).to(device)
-        self.D = torch.zeros(d, d).to(device)
+        self.D = torch.eye(d).to(device)
         self.R = torch.eye(d).to(device)
 
 
